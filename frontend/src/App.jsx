@@ -65,6 +65,7 @@ function App() {
   }, [darkMode]);
 
   const [socket, setSocket] = useState(null);
+  const [isSocketConnected, setIsSocketConnected] = useState(false);
   
   // Sentence inputs
   const [inputText, setInputText] = useState("");
@@ -125,6 +126,11 @@ function App() {
 
     newSocket.on("connect", () => {
       console.log("Connected to server via WebSocket");
+      setIsSocketConnected(true);
+    });
+
+    newSocket.on("disconnect", () => {
+      setIsSocketConnected(false);
     });
 
     newSocket.on("room_closed", ({ reason }) => {
@@ -557,11 +563,19 @@ function App() {
 
   // 4. STUDENT JOIN OPERATIONS
   const handleJoinRoom = () => {
-    if (!roomPin || !nickname) {
+    if (!roomPin.trim() || !nickname.trim()) {
       alert("Please enter both the Room PIN and Nickname.");
       return;
     }
-    socket.emit("student_join_room", { pin: roomPin, nickname }, (res) => {
+    if (!socket || !socket.connected) {
+      alert("Not connected to server. Please refresh the page and try again.");
+      return;
+    }
+    socket.timeout(8000).emit("student_join_room", { pin: roomPin, nickname }, (err, res) => {
+      if (err) {
+        alert("Connection timed out. Please check that the server is running and try again.");
+        return;
+      }
       console.log("student_join_room response payload received:", res);
       if (res && res.success) {
         setRoomPin(roomPin);
@@ -1174,11 +1188,16 @@ function App() {
                   </div>
                 </div>
                 
+                {!isSocketConnected && (
+                  <p style={{ color: "hsl(var(--error, 0 84% 60%))", fontSize: "0.78rem", marginBottom: "0.5rem", textAlign: "center" }}>
+                    Not connected to server — please wait or refresh
+                  </p>
+                )}
                 <button
                   className="btn btn-primary"
                   onClick={handleJoinRoom}
-                  disabled={!roomPin.trim() || !nickname.trim()}
-                  style={{ width: "100%", background: "hsl(var(--success))" }}
+                  disabled={!roomPin.trim() || !nickname.trim() || !isSocketConnected}
+                  style={{ width: "100%", background: isSocketConnected ? "hsl(var(--success))" : undefined }}
                 >
                   Join Session (הצטרפות)
                 </button>

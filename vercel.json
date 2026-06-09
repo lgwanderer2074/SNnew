@@ -8,7 +8,7 @@
     "backend": {
       "root": "backend",
       "routePrefix": "/_/backend",
-      "runtime": "nodejs",
+      "builder": "@vercel/node",
       "entrypoint": "server.js"
     }
   }

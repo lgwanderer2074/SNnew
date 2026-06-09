@@ -2,11 +2,11 @@
   "experimentalServices": {
     "frontend": {
       "root": "frontend",
-      "mount": "/"
+      "routePrefix": "/"
     },
     "backend": {
       "root": "backend",
-      "mount": "/_/backend"
+      "routePrefix": "/_/backend"
     }
   }
 }

@@ -1,10 +1,12 @@
 {
   "experimentalServices": {
     "frontend": {
-      "root": "frontend"
+      "root": "frontend",
+      "mount": "/"
     },
     "backend": {
-      "root": "backend"
+      "root": "backend",
+      "mount": "/_/backend"
     }
   }
 }

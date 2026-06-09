@@ -680,6 +680,25 @@ body {
   background: linear-gradient(135deg, hsl(347, 100%, 98%), hsl(347, 77%, 97%));
   border: 1px solid hsla(var(--error) / 0.25);
 }
+.stat-card.neutral {
+  background: hsl(var(--bg-main));
+  border: 1px solid hsl(var(--border-color));
+}
+
+/* Class progress bar (Host Practice summary) */
+.progress-track {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: hsl(var(--border-color));
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--accent)));
+  transition: width 0.4s ease;
+}
 
 /* ─── Theme transition ────────────────────────────────────── */
 body,

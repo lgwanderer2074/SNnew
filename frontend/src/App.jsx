@@ -33,6 +33,7 @@ import {
   convertSubtreeToNodesAndEdges
 } from "./utils/validation";
 import { exportCanvasAsPng, exportCanvasAsSvg } from "./utils/export";
+import { SAMPLE_PRACTICE_PACKAGE } from "./data/samplePractice";
 
 // Setup Socket connection (point to backend port 3001)
 const BACKEND_URL = `http://${window.location.hostname}:3001`;
@@ -272,8 +273,9 @@ function App() {
     setMode("building");
   };
 
-  // Generate the answer key representation and download JSON
-  const handleExportJson = () => {
+  // Build a validated answer key from the current canvas. Returns the key
+  // object, or null after alerting the user if the tree is incomplete.
+  const buildKeyFromCanvas = () => {
     // Find candidate root nodes (nodes with no parents)
     const rootNodes = tree.nodes.filter(node => {
       const hasParent = tree.edges.some(e => e.target === node.id);
@@ -283,7 +285,7 @@ function App() {
     const wordNodes = tree.nodes.filter(n => n.data?.isWord);
     if (wordNodes.length === 0) {
       alert("Please build a tree with the sentence words first.");
-      return;
+      return null;
     }
 
     const nodesMap = new Map(tree.nodes.map(n => [n.id, n]));
@@ -299,7 +301,7 @@ function App() {
 
     for (const root of rootNodes) {
       const rep = buildSubtreeRep(root.id, nodesMap, edgesFromParent, wordNodesMap);
-      
+
       const getSpanIndices = (nodeRep) => {
         if (!nodeRep) return [];
         if (nodeRep.type === "word") return [nodeRep.index];
@@ -318,21 +320,26 @@ function App() {
 
     if (!mainRoot || !rootSubtree) {
       alert("Error: Your tree must contain a single top phrase node (e.g. CP, TP, or S) that dominates all sentence words.");
-      return;
+      return null;
     }
 
     const missingCategory = tree.nodes.some(n => !n.data.isWord && (!n.data.category || n.data.category.trim() === ""));
     if (missingCategory) {
       alert("Please make sure all syntactic category nodes have a label assigned.");
-      return;
+      return null;
     }
 
-    const subtrees = extractAllSubtrees(rootSubtree);
-    const key = {
+    return {
       sentence: tree.sentence,
       rootSubtree,
-      subtrees
+      subtrees: extractAllSubtrees(rootSubtree)
     };
+  };
+
+  // Generate the answer key representation and download JSON
+  const handleExportJson = () => {
+    const key = buildKeyFromCanvas();
+    if (!key) return;
 
     // Trigger file download
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(key, null, 2));
@@ -342,6 +349,13 @@ function App() {
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
+  };
+
+  // Build the current canvas tree into a key and host it as a practice room
+  const handleHostPracticeFromCanvas = () => {
+    const key = buildKeyFromCanvas();
+    if (!key) return;
+    startPracticeRoom([key]);
   };
 
   // 2. HOST PRACTICE MODE OPERATIONS
@@ -381,26 +395,46 @@ function App() {
     e.target.value = null; // Reset file input
   };
 
-  const handleHostPracticeRoom = () => {
-    if (practiceUploads.length === 0) {
-      alert("Please upload at least one syntax tree configuration JSON file.");
+  // Host a practice room from any package of keys (uploaded, sample, or in-app built)
+  const startPracticeRoom = (pkg) => {
+    if (!pkg || pkg.length === 0) {
+      alert("Add at least one sentence — upload a JSON key, load a sample set, or build one in the canvas.");
+      return;
+    }
+    if (!socket || !socket.connected) {
+      alert("Not connected to server. Please refresh the page and try again.");
       return;
     }
 
-    socket.emit("host_create_room", { 
-      roomType: "practice", 
-      package: practiceUploads,
-      pkg: practiceUploads,
-      practicePackage: practiceUploads
+    socket.emit("host_create_room", {
+      roomType: "practice",
+      package: pkg,
+      pkg: pkg,
+      practicePackage: pkg
     }, (res) => {
-      if (res.success) {
+      if (res && res.success) {
         setRoomPin(res.pin);
-        setPracticePackage(practiceUploads);
+        setPracticePackage(pkg);
         setRoomType("practice");
         setMode("host_practice_lobby");
       } else {
         alert("Failed to create Practice room.");
       }
+    });
+  };
+
+  const handleHostPracticeRoom = () => startPracticeRoom(practiceUploads);
+
+  // Load the built-in sample sentences into the practice package
+  const handleLoadSamplePractice = () => {
+    setPracticeUploads((prev) => {
+      const existing = new Set(prev.map((p) => p.sentence));
+      const additions = SAMPLE_PRACTICE_PACKAGE.filter((s) => !existing.has(s.sentence));
+      if (additions.length === 0) {
+        alert("The sample sentences are already loaded.");
+        return prev;
+      }
+      return [...prev, ...additions];
     });
   };
 
@@ -1035,9 +1069,9 @@ function App() {
                     Host Practice Session
                   </h3>
                   <p style={{ color: "hsl(var(--text-muted))", fontSize: "0.85rem", marginBottom: "1.25rem", lineHeight: 1.5 }}>
-                    Upload a package of pre-built syntax tree JSON keys to host a self-paced class assignment with real-time student progress tracking.
+                    Upload pre-built JSON keys, or load a ready-made sample set to start instantly — no file needed. Track student progress in real time.
                   </p>
-                  
+
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "1rem" }}>
                     <input
                       type="file"
@@ -1050,6 +1084,14 @@ function App() {
                     <label htmlFor="practice-files-upload" className="btn btn-secondary" style={{ cursor: "pointer", width: "100%", minHeight: "44px", display: "inline-flex", justifyContent: "center" }}>
                       <Upload size={14} /> Upload JSON Keys
                     </label>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={handleLoadSamplePractice}
+                      style={{ width: "100%", minHeight: "44px", justifyContent: "center" }}
+                    >
+                      <Sparkles size={14} /> Load Sample Set ({SAMPLE_PRACTICE_PACKAGE.length})
+                    </button>
 
                     {practiceUploads.length > 0 && (
                       <div style={{ borderTop: "1px solid hsl(var(--border-color))", paddingTop: "0.5rem" }}>
@@ -1222,6 +1264,9 @@ function App() {
                 <button className="btn btn-secondary" onClick={handleExportJson} title="Export this syntax configuration key as JSON">
                   <Download size={15} /> Export Tree Configuration
                 </button>
+                <button className="btn btn-primary" onClick={handleHostPracticeFromCanvas} title="Host a practice session using this tree as the answer key — no file needed">
+                  <BookOpen size={15} /> Host as Practice
+                </button>
                 <button className="btn btn-secondary" onClick={tree.clearTree}>
                   <RefreshCw size={16} /> Reset
                 </button>
@@ -1317,6 +1362,41 @@ function App() {
                 Students join this practice room on their own devices using the room PIN.
               </p>
             </div>
+
+            {/* CLASS PROGRESS SUMMARY */}
+            {joinedStudents.length > 0 && (() => {
+              const total = joinedStudents.length;
+              const finished = joinedStudents.filter((s) => s.completed).length;
+              const totalSentences = practicePackage.length || 1;
+              const sentencesDone = joinedStudents.reduce((sum, s) => {
+                if (s.completed) return sum + totalSentences;
+                const idx = s.progress ? (s.progress.currentIndex || 0) : 0;
+                return sum + Math.min(idx, totalSentences);
+              }, 0);
+              const classPct = Math.round((sentencesDone / (total * totalSentences)) * 100);
+              const avgSentence = Math.min(totalSentences, Math.floor(sentencesDone / total) + 1);
+              return (
+                <div style={{ marginBottom: "1.5rem" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.75rem", marginBottom: "0.85rem" }}>
+                    <div className={`stat-card ${finished === total ? "positive" : "neutral"}`} style={{ padding: "0.85rem 1rem", textAlign: "center" }}>
+                      <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "hsl(var(--text-primary))" }}>{finished} / {total}</div>
+                      <div style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.08em", color: "hsl(var(--text-muted))", fontWeight: 700, marginTop: "0.2rem" }}>Finished</div>
+                    </div>
+                    <div className="stat-card neutral" style={{ padding: "0.85rem 1rem", textAlign: "center" }}>
+                      <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "hsl(var(--text-primary))" }}>{avgSentence} <span style={{ fontSize: "0.9rem", fontWeight: 600, color: "hsl(var(--text-muted))" }}>/ {totalSentences}</span></div>
+                      <div style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.08em", color: "hsl(var(--text-muted))", fontWeight: 700, marginTop: "0.2rem" }}>Class avg sentence</div>
+                    </div>
+                    <div className="stat-card neutral" style={{ padding: "0.85rem 1rem", textAlign: "center" }}>
+                      <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "hsl(var(--primary))" }}>{classPct}%</div>
+                      <div style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.08em", color: "hsl(var(--text-muted))", fontWeight: 700, marginTop: "0.2rem" }}>Overall progress</div>
+                    </div>
+                  </div>
+                  <div className="progress-track">
+                    <div className="progress-fill" style={{ width: `${classPct}%` }} />
+                  </div>
+                </div>
+              );
+            })()}
 
             <div style={{ borderTop: "1px solid hsl(var(--border-color))", paddingTop: "1.25rem", display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "1.5rem" }}>
               <div>

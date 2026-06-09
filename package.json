@@ -1,0 +1,14 @@
+{
+  "name": "syntax-tree-builder-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:frontend": "pnpm --filter frontend dev",
+    "dev:backend": "pnpm --filter backend start",
+    "dev": "concurrently \"pnpm run dev:backend\" \"pnpm run dev:frontend\"",
+    "install:all": "pnpm install && pnpm --filter frontend install && pnpm --filter backend install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
